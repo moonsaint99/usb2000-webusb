@@ -1,6 +1,6 @@
 import {USB2000} from './usb2000.mjs?v=20260929-framing';
 import {workflow} from './workflow.mjs?v=20260929-guided';
-import {snapshot,plot} from './plot.mjs?v=20260929-images';
+import {snapshot,plot} from './plot.mjs?v=20260929-observation';
 const minimumMs=()=>instrument.device?.opened?instrument.minMs:1;
 const sliderMs=position=>Math.round(minimumMs()*(500/minimumMs())**(Number(position)/1000));
 const sliderPosition=ms=>Math.round(1000*Math.log(ms/minimumMs())/Math.log(500/minimumMs()));
@@ -57,7 +57,7 @@ function draw(){
  }
  controls();
 }
-function show(s){data=s;usable=true;$('status').textContent=`${s.model} ${s.serial} — ${s.integration_ms} ms`;$('peak').textContent=`Maximum: ${Math.max(...s.raw).toFixed(0)} counts`;note(s.saturated?'Signal saturated. Shorten integration time.':'');draw();}
+function show(s){data=s;usable=true;$('status').textContent=`${s.model} ${s.serial} — ${s.integration_ms} ms`;$('peak').textContent=`Maximum: ${Math.max(...s.raw).toFixed(0)} counts`;note();draw();}
 function fail(e){running=false;usable=false;note(e);controls();}
 async function refresh(){if(busy||pending||!instrument.device)return;busy=true;try{show(await instrument.scan());}catch(e){fail(e);}finally{busy=false;controls();}}
 async function action(fn){if(pending)return;pending=true;controls();while(busy)await new Promise(r=>setTimeout(r,20));busy=true;try{note();await fn();}catch(e){fail(e);}finally{pending=false;busy=false;controls();}}

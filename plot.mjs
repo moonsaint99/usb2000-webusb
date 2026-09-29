@@ -18,5 +18,4 @@ export function plot(canvas,s){
  y.forEach((v,i)=>{if(v===null||!Number.isFinite(v)){pen=false;return;}if(pen)ctx.lineTo(px(x[i]),py(v));else ctx.moveTo(px(x[i]),py(v));pen=true;});ctx.stroke();ctx.restore();
  ctx.textAlign='left';ctx.fillStyle='#a01818';
  if(!finite.length)ctx.fillText('No valid reflectance values. Check the dark and reference.',L,T+30);
- else if(finite.some(v=>v<lo||v>hi))ctx.fillText('Some values are outside the displayed scale.',L,B-16);
 }
