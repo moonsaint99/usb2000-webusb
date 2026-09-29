@@ -47,3 +47,13 @@ captureDevice.scan=async()=>({raw:Array(2048).fill(++scanNumber),saturated:false
 await captureDevice.capture('dark');
 assert.equal(scanNumber,6);assert.ok(captureDevice.dark.every(v=>Math.abs(v-4)<1e-10));
 console.log('Capture snapshots remain fixed; calibration images use the five-scan average.');
+
+const {workflow}=await import('./workflow.mjs');
+assert.equal(workflow('raw',null,null).stage,'raw');
+assert.equal(workflow('reflectance',null,null).stage,'d');
+assert.equal(workflow('reflectance',[1],null).stage,'w');
+assert.equal(workflow('reflectance',[1],[2]).plotMode,'reflectance');
+assert.equal(workflow('reflectance',[1],[2],'d').plotMode,'raw');
+assert.equal(workflow('reflectance',[1],[2],'w').stage,'w');
+assert.equal(workflow('reflectance',null,null,'w').stage,'d');
+console.log('Guided D/W/S sequence and independent retake transitions passed.');
