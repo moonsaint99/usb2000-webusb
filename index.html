@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Spectroscopy lab</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f6f9;color:#142638;font:16px system-ui}main{max-width:1200px;margin:32px auto;padding:0 24px}h1{font-size:32px;margin:0}p{line-height:1.5}.muted{color:#586b7b}.bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:20px 0}button,input,select{font:inherit;border:1px solid #bbc9d4;border-radius:7px;padding:10px;background:white}button{cursor:pointer}button.primary{background:#17607b;color:white;border:0}button:disabled{opacity:.5;cursor:wait}input[type=number]{width:110px}canvas{width:100%;height:450px;background:white;border:1px solid #d7e0e6;border-radius:10px}.card{background:white;padding:18px;border-radius:10px;border:1px solid #d7e0e6}.cards{display:grid;grid-template-columns:1fr 1fr;gap:16px}.warn{color:#a53516;min-height:25px}#status{min-height:24px}.pill{font-size:14px;background:#e4eef1;border-radius:20px;padding:6px 12px}@media(max-width:700px){.cards{grid-template-columns:1fr}canvas{height:340px}}
+</style><main>
+<div class="muted">REFLECTANCE SPECTROSCOPY · WEBUSB</div><h1>Your spectrum, live</h1>
+<p id="status">Connect your USB2000 directly to this browser. No Python driver is used.</p>
+<div class="bar"><button id="connect" class="primary">Connect spectrometer</button><button id="live">Resume</button><label>Integration <input id="ms" type="number" value="10" min="3" max="2000" step="1"> ms</label><button id="apply">Apply</button><select id="mode"><option value="raw">Raw detector counts</option><option value="reflectance">Relative reflectance (%)</option></select><button id="reconnect">Disconnect</button></div>
+<div class="bar"><span id="d" class="pill">Dark: not captured</span><span id="r" class="pill">Reference: not captured</span><span id="peak" class="muted"></span></div>
+<div id="warning" class="warn" role="alert"></div><canvas id="plot"></canvas>
+<div class="bar"><label><input id="auto" type="checkbox"> Auto-scale vertical axis</label><span class="muted">Fixed scales make pairwise comparisons easier. Clipped counts remain clipped when the axis changes.</span></div>
+<div class="cards"><div class="card"><b>1 · Capture a dark</b><p>Block the fiber entrance completely without moving the setup. Keep the integration time fixed.</p><button id="dark">Capture dark · 5 scans</button></div><div class="card"><b>2 · Capture the white reference</b><p>Uncover the fiber and view illuminated white paper. Keep the lamp, fiber, and integration time fixed, then replace the paper view with your sample.</p><button id="reference">Capture reference · 5 scans</button></div></div>
+<p class="muted">Relative reflectance = 100 × (sample − dark) / (reference − dark). Values can exceed 100%. Weak-reference and saturated pixels are omitted. Changing integration time clears both captures; repeat them whenever the illumination or geometry changes.</p>
+<div class="bar"><input id="label" value="sample" aria-label="Sample label"><button id="csv" class="primary">Save data (.csv)</button><button id="png">Save plot (.png)</button></div><p class="muted">CSV includes wavelength, raw counts, dark, reference, reflectance, serial number, time, and exposure. Data stays in this browser until you save it; there is no automatic backup. Pause before saving to keep the CSV and plot on the same frame.</p>
+<details><summary>Connection details</summary><pre id="log" style="white-space:pre-wrap"></pre></details><p class="muted">Use Chrome or Edge. On Windows, a compatible WinUSB driver association may need one-time setup. Close other spectrometer apps before connecting. This prototype supports the original USB2000, not USB2000+.</p></main><script type="module">
+import {USB2000} from "./usb2000.mjs";
+const instrument=new USB2000();
+const $=id=>document.getElementById(id);let data=null,running=false,busy=false;
+async function api(url,body){
+ if(url==='/api/spectrum')return {json:()=>instrument.scan()};
+ if(url==='/api/settings')await instrument.setExposure(body.integration_ms);
+ else if(url.startsWith('/api/capture/'))await instrument.capture(url.split('/').at(-1));
+ else if(url==='/api/export')return {blob:()=>new Blob([instrument.csv(body.label)],{type:'text/csv'})};
+ return {json:()=>({ok:true})};
+}
+
+function note(e){$('warning').textContent=e.message||e}
+async function refresh(){if(busy)return;busy=true;try{data=await(await api('/api/spectrum')).json();$('status').textContent=`${data.model} · ${data.serial} · ${data.wavelength.length} channels · ${data.integration_ms} ms`;$('d').textContent='Dark: '+(data.dark?'captured':'not captured');$('r').textContent='Reference: '+(data.reference?'captured':'not captured');$('peak').textContent='Peak: '+Math.max(...data.raw).toFixed(0)+' / '+data.max_counts+' counts';note(data.saturated?'Signal is clipped. Shorten the integration time.':'');draw()}catch(e){note(e);running=false;$('live').textContent='Resume'}finally{busy=false}}
+function draw(){if(!data)return;const c=$('plot'),scale=devicePixelRatio||1,W=c.clientWidth,H=c.clientHeight;c.width=W*scale;c.height=H*scale;const ctx=c.getContext('2d');ctx.scale(scale,scale);ctx.fillStyle='white';ctx.fillRect(0,0,W,H);let mode=$('mode').value,y=data[mode],x=data.wavelength;if(!y){ctx.fillStyle='#586b7b';ctx.font='18px system-ui';ctx.fillText('Capture a dark and a reference to view relative reflectance.',50,H/2);return}const finite=y.filter(v=>v!==null);let lo=0,hi=mode==='raw'?data.max_counts:120;if($('auto').checked&&finite.length){lo=Math.min(0,...finite);hi=Math.max(lo+1,...finite);hi+=(hi-lo)*.05}const L=74,R=W-26,T=38,B=H-57;const px=v=>L+(v-x[0])/(x.at(-1)-x[0])*(R-L),py=v=>B-(v-lo)/(hi-lo)*(B-T);ctx.font='12px system-ui';for(let i=0;i<=5;i++){let v=lo+(hi-lo)*i/5,p=py(v);ctx.strokeStyle='#e4eaef';ctx.beginPath();ctx.moveTo(L,p);ctx.lineTo(R,p);ctx.stroke();ctx.fillStyle='#526575';ctx.textAlign='right';ctx.fillText(v.toFixed(0),L-10,p+4);let w=x[0]+(x.at(-1)-x[0])*i/5;ctx.textAlign='center';ctx.fillText(w.toFixed(0),px(w),B+23)}ctx.fillStyle='#142638';ctx.textAlign='center';ctx.fillText('Wavelength (nm)',(L+R)/2,H-12);ctx.save();ctx.translate(18,(T+B)/2);ctx.rotate(-Math.PI/2);ctx.fillText(mode==='raw'?'Detector counts':'Relative reflectance (%)',0,0);ctx.restore();ctx.textAlign='left';ctx.fillText(`${$('label').value} · ${data.integration_ms} ms · ${data.serial}`,L,22);ctx.save();ctx.beginPath();ctx.rect(L,T,R-L,B-T);ctx.clip();ctx.strokeStyle='#087e9e';ctx.lineWidth=1.4;ctx.beginPath();let pen=false;y.forEach((v,i)=>{if(v===null){pen=false;return}if(pen)ctx.lineTo(px(x[i]),py(v));else ctx.moveTo(px(x[i]),py(v));pen=true});ctx.stroke();ctx.restore();if(finite.some(v=>v<lo||v>hi)){ctx.fillStyle='#a53516';ctx.fillText('Some values are outside this view; enable auto-scale.',L,B-10)}}
+async function action(fn){while(busy)await new Promise(r=>setTimeout(r,25));busy=true;document.querySelectorAll('button').forEach(b=>b.disabled=true);try{await fn();note('');return true}catch(e){note(e);return false}finally{busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false)}}
+$('live').onclick=()=>{running=!running;$('live').textContent=running?'Pause':'Resume';if(running)refresh()};
+$('apply').onclick=async()=>{if(await action(()=>api('/api/settings',{integration_ms:Number($('ms').value)})))await refresh()};
+for(const kind of ['dark','reference'])$(kind).onclick=async()=>{if(await action(()=>api('/api/capture/'+kind,{})))await refresh()};
+instrument.onlog=()=>{$('log').textContent=instrument.trace.join('\n')};
+$('connect').onclick=async()=>{
+ if(busy||instrument.device){note('Disconnect the current instrument first.');return;}
+ if(!navigator.usb){note('WebUSB is unavailable. Open this page in Chrome or Edge using HTTPS or localhost.');return;}
+ try{
+   const selected=await navigator.usb.requestDevice({filters:[{vendorId:0x2457,productId:0x1002}]});
+   if(await action(()=>instrument.open(selected))){data=null;running=true;$('live').textContent='Pause';await refresh();}
+ }catch(e){note(e);}
+};
+$('reconnect').onclick=async()=>{running=false;await action(()=>instrument.close());data=null;$('live').textContent='Resume';$('status').textContent='Disconnected. Saved dark and reference cleared.';$('d').textContent='Dark: not captured';$('r').textContent='Reference: not captured';$('peak').textContent='';$('plot').getContext('2d').clearRect(0,0,$('plot').width,$('plot').height);};
+navigator.usb?.addEventListener('disconnect',e=>{if(e.device===instrument.device){running=false;instrument.device=null;instrument.dark=instrument.reference=instrument.latest=null;data=null;$('status').textContent='Instrument unplugged. Reconnect and retake dark and reference.';note('USB connection lost');}});
+if(!navigator.usb)note('This browser does not expose WebUSB. Please use Chrome or Edge.');
+
+function download(blob,name){let a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+$('csv').onclick=()=>action(async()=>{let r=await api('/api/export',{label:$('label').value});download(await r.blob(),'spectrum_'+Date.now()+'.csv')});
+$('png').onclick=()=>{draw();$('plot').toBlob(b=>download(b,'spectrum_'+Date.now()+'.png'))};
+$('mode').onchange=draw;$('auto').onchange=draw;$('label').oninput=draw;window.onresize=draw;
+async function loop(){if(running)await refresh();setTimeout(loop,350)}loop();
+</script></html>

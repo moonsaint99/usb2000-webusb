@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {decodeSpectrum,reflectance,USB2000} from './usb2000.mjs';
+const bytes=new Uint8Array(4097);
+const expected=Array.from({length:2048},(_,i)=>(i*17)%4096);
+expected.forEach((v,i)=>{const base=Math.floor(i/64)*128;bytes[base+i%64]=v&255;bytes[base+64+i%64]=(v>>8)|0xf0;});
+assert.deepEqual(decodeSpectrum(bytes),expected);
+assert.throws(()=>decodeSpectrum(bytes.slice(1)));
+assert.deepEqual(reflectance([110,60,160,4095,12],[10,10,10,10,10],[110,110,110,110,10]),[100,50,150,null,null]);
+assert.equal(reflectance([1],null,[1]),null);
+const d=new USB2000();
+for(const ms of [0,2,3.5,NaN,2001])await assert.rejects(d.setExposure(ms));
+const commands=[];d.write=async b=>commands.push(b);d.scan=async()=>({raw:[]});d.dark=[1];d.reference=[2];
+await d.setExposure(300);
+assert.deepEqual(commands,[[2,44,1,0,0]]);assert.equal(d.dark,null);assert.equal(d.reference,null);
+console.log('WebUSB protocol and calculation checks passed.');
