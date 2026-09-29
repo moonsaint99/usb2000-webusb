@@ -1,6 +1,6 @@
-import {USB2000} from './usb2000.mjs?v=20260929-framing';
-import {workflow} from './workflow.mjs?v=20260929-guided';
-import {snapshot,plot} from './plot.mjs?v=20260929-observation';
+import {USB2000} from './usb2000.mjs?v=20260929-neutral';
+import {workflow} from './workflow.mjs?v=20260929-neutral';
+import {snapshot,plot} from './plot.mjs?v=20260929-neutral';
 const minimumMs=()=>instrument.device?.opened?instrument.minMs:1;
 const sliderMs=position=>Math.round(minimumMs()*(500/minimumMs())**(Number(position)/1000));
 const sliderPosition=ms=>Math.round(1000*Math.log(ms/minimumMs())/Math.log(500/minimumMs()));
@@ -38,7 +38,7 @@ function controls(){const connected=!!instrument.device?.opened;
  $('capture').textContent=state.capture;
  $('restart').disabled=!connected||busy||pending||(!instrument.dark&&!instrument.reference);
  $('reference-guide').hidden=$('spectrum-steps').hidden=state.stage==='raw';
- if(state.stage!=='raw'){$('stage-title').textContent=state.title;$('stage-instruction').textContent=state.instruction;}
+ if(state.stage!=='raw'){$('stage-title').textContent=state.title;}
  $('live').textContent=running?'Pause':'Resume';
  $('calibration').textContent=`D: ${instrument.dark?'stored':'not stored'}. W: ${instrument.reference?'stored':'not stored'}.`;
 }

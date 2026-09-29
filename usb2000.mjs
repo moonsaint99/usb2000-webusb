@@ -81,7 +81,7 @@ export class USB2000 {
     const raw=this.plus?decodePlusSpectrum(all):decodeSpectrum(all);
     this.latest={model:this.model,serial:this.serial,wavelength:this.wavelength,raw,reflectance:reflectance(raw,this.dark,this.reference,this.ceiling),integration_ms:this.ms,min_ms:this.minMs,max_counts:this.ceiling,dark:!!this.dark,reference:!!this.reference,saturated:raw.some(v=>v>=this.ceiling),time:new Date().toISOString()};return this.latest;
   }
-  async capture(kind){if(!['dark','reference'].includes(kind))throw Error('Invalid capture');await this.scan();let sum=Array(2048).fill(0);for(let n=0;n<5;n++){const s=await this.scan();if(s.saturated)throw Error('Capture clipped. Shorten exposure and retake dark/reference.');s.raw.forEach((v,i)=>sum[i]+=v/5);}this[kind]=sum;}
+  async capture(kind){if(!['dark','reference'].includes(kind))throw Error('Invalid capture');await this.scan();let sum=Array(2048).fill(0);for(let n=0;n<5;n++){const s=await this.scan();if(s.saturated)throw Error('Capture not stored.');s.raw.forEach((v,i)=>sum[i]+=v/5);}this[kind]=sum;}
   csv(label){const s=this.latest;if(!s)throw Error('Acquire a spectrum first.');const rr=reflectance(s.raw,this.dark,this.reference,this.ceiling);const cell=v=>'"'+String(v??'').replaceAll('"','""')+'"';return [
     ['# WebUSB spectrum',this.model,s.time],['# serial',this.serial,'integration_ms',this.ms],['# sample',label],['# wavelength coefficients',...this.coefficients],
     ['# raw saturation threshold',this.ceiling],['# corrections','raw ADC counts; no saturation normalization, automatic dark-count or nonlinearity correction'],

@@ -17,5 +17,4 @@ export function plot(canvas,s){
  ctx.save();ctx.beginPath();ctx.rect(L,T,R-L,B-T);ctx.clip();ctx.strokeStyle='#174b83';ctx.lineWidth=1.6;ctx.beginPath();let pen=false;
  y.forEach((v,i)=>{if(v===null||!Number.isFinite(v)){pen=false;return;}if(pen)ctx.lineTo(px(x[i]),py(v));else ctx.moveTo(px(x[i]),py(v));pen=true;});ctx.stroke();ctx.restore();
  ctx.textAlign='left';ctx.fillStyle='#a01818';
- if(!finite.length)ctx.fillText('No valid reflectance values. Check the dark and reference.',L,T+30);
 }
