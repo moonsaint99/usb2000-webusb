@@ -20,7 +20,8 @@ function gallery(){const items=[...$("captures").children];items.forEach((item,i
 $("previous").onclick=()=>{imageIndex--;gallery();};$("next").onclick=()=>{imageIndex++;gallery();};
 function note(text=''){$('warning').textContent=text.message??text;}
 function controls(){const connected=!!instrument.device?.opened;
- for(const id of ['apply','live','dark','reference'])$(id).disabled=!connected||busy||pending;
+ for(const id of ['live','dark','reference'])$(id).disabled=!connected||busy||pending;
+ $('ms').disabled=!connected||pending;
  $('connect').disabled=connected||busy||pending;$('disconnect').disabled=!connected||busy||pending;
  $('capture').disabled=!data||!usable||busy||pending||($('mode').value==='reflectance'&&!data.reflectance);
  $('live').textContent=running?'Pause':'Resume';
@@ -41,7 +42,12 @@ $('connect').onclick=async()=>{if(!navigator.usb){note('Open this page in Chrome
 };
 $('disconnect').onclick=()=>action(async()=>{running=false;await instrument.close();$('ms').value=sliderPosition(10);updateIntegration();data=null;usable=false;$('status').textContent='Not connected';$('peak').textContent='';draw();});
 $('live').onclick=()=>{running=!running;controls();};
-$('apply').onclick=()=>action(async()=>{await instrument.setExposure(updateIntegration());data=null;usable=false;show(await instrument.scan());});
+$('ms').onchange=()=>{
+ const ms=updateIntegration();
+ if(!instrument.device?.opened||ms===instrument.ms)return;
+ // The change event commits on release; input only updates the displayed value.
+ return action(async()=>{await instrument.setExposure(ms);data=null;usable=false;show(await instrument.scan());});
+};
 for(const kind of ['dark','reference'])$(kind).onclick=()=>action(async()=>{
  await instrument.capture(kind);
  // Freeze the actual five-scan average, not the next live spectrum.
