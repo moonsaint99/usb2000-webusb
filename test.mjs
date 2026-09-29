@@ -33,3 +33,17 @@ await assert.rejects(readSpectrumFrame(async()=>bad),/boundary/);
 await assert.rejects(readSpectrumFrame(async()=>new Uint8Array(4098)),/Invalid spectrum/);
 await assert.rejects(readSpectrumFrame(async()=>new Uint8Array([0x69])),/leftover/);
 console.log('Orphan terminator recovery and corrupt-frame rejection passed.');
+
+// Captures must survive later scans and display changes without changing their data.
+const {snapshot}=await import('./plot.mjs');
+const original={wavelength:[400,500],raw:[100,200],reflectance:[25,null],max_counts:4095,integration_ms:10,serial:'test',model:'USB2000',time:'2026-09-28T12:00:00Z'};
+const saved=snapshot(original,'raw','Sample');
+original.raw[0]=999;original.wavelength[0]=350;original.integration_ms=20;
+assert.deepEqual(saved.y,[100,200]);assert.deepEqual(saved.x,[400,500]);assert.equal(saved.ms,10);
+assert.deepEqual(snapshot(original,'reflectance','Sample').y,[25,null]);
+assert.throws(()=>snapshot({...original,reflectance:null},'reflectance','Sample'),/dark and reference/);
+const captureDevice=new USB2000();let scanNumber=0;
+captureDevice.scan=async()=>({raw:Array(2048).fill(++scanNumber),saturated:false});
+await captureDevice.capture('dark');
+assert.equal(scanNumber,6);assert.ok(captureDevice.dark.every(v=>Math.abs(v-4)<1e-10));
+console.log('Capture snapshots remain fixed; calibration images use the five-scan average.');
