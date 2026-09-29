@@ -13,7 +13,7 @@
 <p class="muted">Relative reflectance = 100 × (sample − dark) / (reference − dark). Values can exceed 100%. Weak-reference and saturated pixels are omitted. Changing integration time clears both captures; repeat them whenever the illumination or geometry changes.</p>
 <div class="bar"><input id="label" value="sample" aria-label="Sample label"><button id="csv" class="primary">Save data (.csv)</button><button id="png">Save plot (.png)</button></div><p class="muted">CSV includes wavelength, raw counts, dark, reference, reflectance, serial number, time, and exposure. Data stays in this browser until you save it; there is no automatic backup. Pause before saving to keep the CSV and plot on the same frame.</p>
 <details><summary>Connection details</summary><pre id="log" style="white-space:pre-wrap"></pre></details><p class="muted">Use Chrome or Edge. On Windows, a compatible WinUSB driver association may need one-time setup. Close other spectrometer apps before connecting. Supports USB2000 and USB2000+; the model is detected automatically.</p></main><script type="module">
-import {USB2000} from "./usb2000.mjs";
+import {USB2000} from "./usb2000.mjs?v=20260929-framing";
 const instrument=new USB2000();
 const $=id=>document.getElementById(id);let data=null,running=false,busy=false;
 async function api(url,body){

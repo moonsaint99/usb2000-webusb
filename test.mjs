@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {decodeSpectrum,decodePlusSpectrum,reflectance,USB2000} from './usb2000.mjs';
+import {decodeSpectrum,decodePlusSpectrum,readSpectrumFrame,reflectance,USB2000} from './usb2000.mjs';
 const bytes=new Uint8Array(4097);
 const expected=Array.from({length:2048},(_,i)=>(i*17)%4096);
 expected.forEach((v,i)=>{const base=Math.floor(i/64)*128;bytes[base+i%64]=v&255;bytes[base+64+i%64]=(v>>8)|0xf0;});
@@ -23,3 +23,13 @@ d.plus=true;d.minMs=1;commands.length=0;await d.setExposure(1000);
 assert.deepEqual(commands,[[2,64,66,15,0]]);
 commands.length=0;await d.setExposure(1);assert.deepEqual(commands,[[2,232,3,0,0]]);
 console.log('USB2000+ 16-bit decoding, saturation masking, and microsecond exposure checks passed.');
+
+bytes[4096]=0x69;
+let packets=[new Uint8Array([0x69]),bytes.slice(0,4096),bytes.slice(4096)];
+assert.deepEqual(await readSpectrumFrame(async()=>packets.shift()),bytes);
+packets=[bytes];assert.deepEqual(await readSpectrumFrame(async()=>packets.shift()),bytes);
+const bad=bytes.slice();bad[4096]=0;
+await assert.rejects(readSpectrumFrame(async()=>bad),/boundary/);
+await assert.rejects(readSpectrumFrame(async()=>new Uint8Array(4098)),/Invalid spectrum/);
+await assert.rejects(readSpectrumFrame(async()=>new Uint8Array([0x69])),/leftover/);
+console.log('Orphan terminator recovery and corrupt-frame rejection passed.');

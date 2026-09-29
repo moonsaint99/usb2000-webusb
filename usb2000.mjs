@@ -1,5 +1,21 @@
 // USB2000 (2457:1002) and USB2000+ (2457:101e). Protocol reference: python-seabreeze 2.11.0.
 // Sends initialize, exposure, trigger, EEPROM-read, and spectrum-read commands only.
+// Some legacy units leave a standalone 0x69 terminator after an interrupted read.
+// Never count it as pixel data: that shifts every pixel and produces false spikes.
+export async function readSpectrumFrame(read,packet=64) {
+  const all=new Uint8Array(4097);let total=0,orphanMarkers=0;
+  while(total<4097){
+    const b=await read(Math.ceil((4097-total)/packet)*packet);
+    if(total===0&&b.length===1&&b[0]===0x69){
+      if(++orphanMarkers>2)throw Error('Too many leftover frame markers. Unplug and reconnect the instrument.');
+      continue;
+    }
+    if(!b.length||total+b.length>4097)throw Error(`Invalid spectrum packet (${b.length} bytes after ${total}). Unplug and reconnect the instrument.`);
+    all.set(b,total);total+=b.length;
+  }
+  if(all[4096]!==0x69)throw Error('Spectrum boundary marker missing. Unplug and reconnect the instrument.');
+  return all;
+}
 export function decodeSpectrum(bytes) {
   if (bytes.length !== 4097) throw Error(`Incomplete spectrum: ${bytes.length}/4097 bytes`);
   return Array.from({length:2048}, (_,i)=>{
@@ -47,7 +63,7 @@ export class USB2000 {
         this.log(`USB2000+ raw-count saturation threshold: ${this.ceiling}`);
       }
       this.serial=await this.slot(0);const coeff=[];
-      for(let n=1;n<=4;n++){const text=await this.slot(n);if(!text)throw Error('Missing wavelength calibration');const v=Number(text);if(!Number.isFinite(v))throw Error('Invalid wavelength calibration');coeff.push(v);}
+      for(let n=1;n<=4;n++){const text=await this.slot(n);if(!text)throw Error('Missing wavelength calibration');const v=Number(text);this.log(`Calibration slot ${n}: ${JSON.stringify(text)}`);if(!Number.isFinite(v))throw Error(`Invalid wavelength calibration in slot ${n}: ${JSON.stringify(text)}`);coeff.push(v);}
       this.coefficients=coeff;this.wavelength=Array.from({length:2048},(_,i)=>coeff.reduce((s,c,n)=>s+c*i**n,0));
       if(this.wavelength.some((v,i)=>!Number.isFinite(v)||(i&&v<=this.wavelength[i-1])))throw Error('Wavelength calibration is not increasing.');
       await this.write([10,0,0]);await this.setExposure(Math.max(this.minMs,this.ms));
@@ -58,9 +74,10 @@ export class USB2000 {
   async setExposure(ms){if(!Number.isInteger(ms)||ms<this.minMs||ms>2000)throw Error(`Use a whole-number integration time from ${this.minMs} to 2000 ms.`);const units=this.plus?ms*1000:ms;await this.write([2,units&255,(units>>>8)&255,(units>>>16)&255,(units>>>24)&255]);this.ms=ms;this.dark=this.reference=this.latest=null;await this.scan();this.latest=null;}
   async scan(){
     if(!this.device?.opened)throw Error('Connect the spectrometer first.');
-    await this.write([9]);let parts=[],total=0;
-    while(total<4097){const b=await this.read(this.specEndpoint,Math.ceil((4097-total)/this.packet)*this.packet);if(!b.length||total+b.length>4097)throw Error('Unexpected spectrum packet length. Reconnect the instrument.');parts.push(b);total+=b.length;}
-    const all=new Uint8Array(4097);let pos=0;for(const b of parts){all.set(b,pos);pos+=b.length;}
+    let all;
+    try {
+      await this.write([9]);all=await readSpectrumFrame(length=>this.read(this.specEndpoint,length),this.packet);
+    } catch(e) {this.failed=true;this.log('Spectrum rejected: '+e.message);throw e;}
     const raw=this.plus?decodePlusSpectrum(all):decodeSpectrum(all);
     this.latest={model:this.model,serial:this.serial,wavelength:this.wavelength,raw,reflectance:reflectance(raw,this.dark,this.reference,this.ceiling),integration_ms:this.ms,min_ms:this.minMs,max_counts:this.ceiling,dark:!!this.dark,reference:!!this.reference,saturated:raw.some(v=>v>=this.ceiling),time:new Date().toISOString()};return this.latest;
   }
