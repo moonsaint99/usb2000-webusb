@@ -1,4 +1,4 @@
-# Browser-only USB2000 interface
+# Browser-only USB2000 / USB2000+ interface
 
 Verified in Chrome on this Apple Silicon Mac with USB2000 serial USB2E142 on 2026-09-28: device permission/selection, opening and claiming its USB interface, reading factory wavelength calibration, live 2048-pixel spectra, changing exposure from 10 to 20 ms, and downloading CSV and PNG. Downloaded CSV contents were checked. Full physical dark/reference/reflectance validation and Windows hardware testing remain outstanding.
 
@@ -14,7 +14,7 @@ For local development, from this directory run `python3 -m http.server 8765 --bi
 
 - Chrome on macOS: tested with the original USB2000, VID 2457 / PID 1002.
 - Chrome/Edge on Windows: not yet tested. A compatible WinUSB driver association may require one-time setup, which a website cannot install.
-- Other models, including USB2000+, are deliberately excluded because packet formats differ.
+- USB2000+ (2457:101e): tested on this Mac with serial USB2+F05064, including live acquisition, 1 ms exposure, calibration, and CSV export. Windows remains untested. Other models are excluded.
 - WebUSB requires a secure context (HTTPS or localhost) and a device permission granted through the browser chooser. Browser or organization policies can disable it.
 
 ## Protocol and calculation
@@ -31,3 +31,9 @@ Five scans are averaged for dark and reference. Exposure changes clear both. Rel
 ## Tests
 
 Run `node test.mjs` for packet decoding, reflectance masking, and exposure validation tests. These are software checks, separate from the real Chrome hardware test above.
+
+## USB2000+ details
+
+Model selection is automatic. USB2000+ uses command endpoint 1, information endpoint 1, and a speed-dependent spectrum endpoint (2 at high speed; 1 at full speed). Spectra are sequential little-endian 16-bit pixels. Integration commands use microseconds (the UI uses whole milliseconds, 1–2000 ms). The raw saturation threshold comes from EEPROM slot 17, falling back to 65535 if unset. Counts are not normalized to 65535 as SeaBreeze does: to compare with its default output, multiply these raw counts by 65535 / raw saturation threshold. Reflectance ratios are unchanged by this common scaling. USB2000 retains its original decoding and 3 ms minimum.
+
+For the tested USB2000+, the EEPROM saturation threshold was 28000 and the wavelength span was 339.93762–1027.66643 nm. A stable large value in detector pixel 1 also appears in SeaBreeze; maximum-count readouts can therefore be dominated by this pixel even when illumination changes. Full physical reflectance validation remains outstanding.
